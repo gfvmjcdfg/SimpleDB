@@ -18,9 +18,9 @@ public class TransactionManagerImpl implements TransactionManager{
     //设置每个事务记录的长度
     private static final int XID_FIELD_LENGTH=1;
     //设置事务的三个状态码
-    private static final byte TRAN_STATE_ACTIVATE=0;
-    private static final byte TRAN_STATE_COMMITED=1;
-    private static final byte TRAN_STATE_ABORTED=2;
+    private static final byte XID_STATE_ACTIVATE=0;
+    private static final byte XID_STATE_COMMITED=1;
+    private static final byte XID_STATE_ABORTED=2;
     //超级事务的id(不使用)，永远为comitted状态
     private static final long SUPER_XID=0;
     //xid文件的后缀
@@ -79,9 +79,50 @@ public class TransactionManagerImpl implements TransactionManager{
 
     }
 
-    @Override
+    /**
+     * 返回一个事务在xid文件中的位置,即在第几个字节，从0开始计数
+     * 0号事务不需要记录，因此位置要为（xid-1）*XID_FIELD_LENGTH
+     * @param xid
+     * @return
+     */
+    public long calXidPosition(long xid){
+        return XID_HEAD_LENGTH+(xid-1)*XID_FIELD_LENGTH;
+    }
+
+    /**
+     * 用于更新对应xid事务的状态,用于被修改事务状态的其他函数调用
+     */
+    public void updateXidStatus(long xid,byte status){
+        //获取事务在xid文件中偏移量
+        long offst=calXidPosition(xid);
+        try {
+            fileChannel.position(offst);
+            //创建我们即将写入的数据
+            byte[] bytes=new byte[XID_FIELD_LENGTH];
+            bytes[0]=status;
+            ByteBuffer wrap = ByteBuffer.wrap(bytes, 0, XID_FIELD_LENGTH);
+            fileChannel.write(wrap);
+            //强制立刻更新到磁盘，但是不必更新元数据
+            fileChannel.force(false);
+        } catch (IOException e) {
+            ProgramExit.programExit(e);
+        }
+    }
+
+
+    /**
+     * 这里还有个问题，这里修改完xidcount++，我们应该也要修改xid文件的head
+     * @return
+     */
     public long begin() {
-        return 0;
+        lock.lock();
+        try {
+            xidCount++;
+            updateXidStatus(xidCount,XID_STATE_ACTIVATE);
+            return xidCount;
+        }finally {
+            lock.unlock();
+        }
     }
 
     @Override
