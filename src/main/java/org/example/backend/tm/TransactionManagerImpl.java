@@ -1,5 +1,16 @@
 package org.example.backend.tm;
 
+import org.example.backend.utils.ProgramExit;
+import org.example.comon.Error;
+
+import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.nio.Buffer;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
 public class TransactionManagerImpl implements TransactionManager{
 
     //设置xID文件头长度
@@ -14,6 +25,59 @@ public class TransactionManagerImpl implements TransactionManager{
     private static final long SUPER_XID=0;
     //xid文件的后缀
     private static final String STRING_XID_FILE_SUFFIX=".xid";
+
+    //读取到的xid文件
+    private RandomAccessFile xidFile;
+    //nio传输xid文件的通道
+    private FileChannel fileChannel;
+    //记录xid文件管理的事务数目
+    private long xidCount;
+
+    private Lock lock;
+
+    //新建我们的事务管理，并且在新建完之后要检查xid文件的合法性
+    TransactionManagerImpl(RandomAccessFile xidFile,FileChannel fileChannel){
+        this.fileChannel=fileChannel;
+        this.xidFile=xidFile;
+        lock=new ReentrantLock();
+        checkXidFile();
+    }
+
+    /**
+     * 检查xid文件是否合法
+     * 合法指的是xid文件是要前面8个字符是事务总个数,这个要与8个字符后面的字符个数要一致
+     */
+    public void checkXidFile(){
+        long fileLen=0;
+        try{
+            //记录xid文件长度
+            fileLen=xidFile.length();
+        }catch (IOException e) {
+            ProgramExit.programExit(e);
+        }
+
+        //xid文件小于8个字节肯定不对
+        if(fileLen<XID_HEAD_LENGTH){
+            ProgramExit.programExit(Error.XID_FILE_FORMAT_ERROR);
+        }
+
+        //检查事务数是不是对的上
+        long transactionNum=0;
+        ByteBuffer buffer= ByteBuffer.allocate(XID_HEAD_LENGTH);
+        try {
+            fileChannel.read(buffer);
+            buffer.flip();
+            //直接调用Buffer流获得事务的个数
+            transactionNum+=buffer.getLong();
+        } catch (IOException e) {
+            ProgramExit.programExit(e);
+        }
+
+        if(transactionNum!=fileLen-8){
+            ProgramExit.programExit(Error.XID_FILE_FORMAT_ERROR);
+        }
+
+    }
 
     @Override
     public long begin() {
