@@ -109,6 +109,43 @@ public class TransactionManagerImpl implements TransactionManager{
         }
     }
 
+    /**
+     * 更新xidCount的值，同时更新xid文件头
+     */
+    public void increseXidCount(){
+        //由于++操作不是一个原子操作，这里上了个锁
+        lock.lock();
+        xidCount++;
+        ByteBuffer buffer = ByteBuffer.allocate(8).putLong(xidCount);
+        try {
+            fileChannel.position(0);
+            fileChannel.write(buffer);
+        } catch (IOException e) {
+            ProgramExit.programExit(e);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * 检查xid事务的状态
+     * @param xid
+     * @return
+     */
+    public byte getXidStatus(long xid){
+        long offset = calXidPosition(xid);
+        try {
+            fileChannel.position(offset);
+            ByteBuffer byteBuffer = ByteBuffer.allocate(XID_FIELD_LENGTH);
+            fileChannel.read(byteBuffer);
+            byteBuffer.flip();
+            return byteBuffer.get();
+        } catch (IOException e) {
+            ProgramExit.programExit(e);
+        }
+        return -1;
+    }
+
 
     /**
      * 这里还有个问题，这里修改完xidcount++，我们应该也要修改xid文件的head
@@ -117,7 +154,8 @@ public class TransactionManagerImpl implements TransactionManager{
     public long begin() {
         lock.lock();
         try {
-            xidCount++;
+            //调用方法将xid++，并更新xid文件头
+            increseXidCount();
             updateXidStatus(xidCount,XID_STATE_ACTIVATE);
             return xidCount;
         }finally {
@@ -125,33 +163,52 @@ public class TransactionManagerImpl implements TransactionManager{
         }
     }
 
-    @Override
-    public boolean commit(long xID) {
-        return false;
+    /**
+     * 提交事务
+     * @param xid
+     */
+    public void commit(long xid) {
+        updateXidStatus(xid,XID_STATE_COMMITED);
+    }
+
+    /**
+     * 取消/回滚事务
+     * @param xid
+     */
+    public void abort(long xid) {
+        updateXidStatus(xid,XID_STATE_ABORTED);
     }
 
     @Override
-    public boolean abort(long xID) {
-        return false;
+    public boolean isActive(long xid) {
+        byte xidStatus = getXidStatus(xid);
+
+        return xidStatus==XID_STATE_ACTIVATE;
     }
 
     @Override
-    public boolean isActive(long xID) {
-        return false;
+    public boolean isCommit(long xid) {
+
+        byte xidStatus = getXidStatus(xid);
+
+        return xidStatus==XID_STATE_COMMITED;
     }
 
     @Override
-    public boolean isCommit(long xID) {
-        return false;
+    public boolean isAborted(long xid) {
+        byte xidStatus = getXidStatus(xid);
+        return xidStatus==XID_STATE_ABORTED;
     }
 
-    @Override
-    public boolean isAborted(long xID) {
-        return false;
-    }
-
-    @Override
+    /**
+     * 关闭TM模块功能，即将打开的xid文件关闭
+     */
     public void close() {
-
+        try {
+            fileChannel.close();
+            xidFile.close();
+        } catch (IOException e) {
+            ProgramExit.programExit(e);
+        }
     }
 }
