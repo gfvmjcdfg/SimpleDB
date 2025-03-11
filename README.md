@@ -4,11 +4,13 @@
 
 其中数据库分为五个模块：
 
-TM: transaction management 
+## TM: transaction management 
 
 通过 XID 文件来维护事务的状态，并提供接口供其他模块来查询某个事务的状态
 
-DM: data management
+## DM: data management
+
+直接管理db文件与日志文件。
 
 对于数据的管理，主要有以下职责
 
@@ -18,8 +20,8 @@ DM: data management
 
 因此，这一模块就是上层模块和文件系统之间的一个抽象层，向下直接读写文件，向上提供数据的包装；另外就是日志功能。
 
-VM: version management
+## VM: version management
 
-IM: index management
+## IM: index management
 
-TBM: table management
+## TBM: table management

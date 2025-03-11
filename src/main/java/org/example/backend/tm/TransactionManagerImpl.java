@@ -36,7 +36,7 @@ public class TransactionManagerImpl implements TransactionManager{
     private Lock lock;
 
     //新建我们的事务管理，并且在新建完之后要检查xid文件的合法性
-    TransactionManagerImpl(RandomAccessFile xidFile,FileChannel fileChannel){
+    public TransactionManagerImpl(RandomAccessFile xidFile,FileChannel fileChannel){
         this.fileChannel=fileChannel;
         this.xidFile=xidFile;
         lock=new ReentrantLock();
