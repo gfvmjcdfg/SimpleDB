@@ -1,19 +1,18 @@
 package org.example.backend.dm.page;
 
-import org.example.backend.dm.pagecache.PageCacheImpl;
+import org.example.backend.dm.pagecache.MemoryPageCacheImpl;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class PageIml implements Page {
-    //将缓存中页面大小定为8k
-    public static int PAGE_SIZE=1 << 13;
+public class MemoryPageIml implements MemoryPage {
+
     private int pageNumber;  //页号
     private byte[] data;   //页面中存储的数据
     private Lock lock;    //该页的锁
     private boolean dirty;  //是否是脏页
-    private PageCacheImpl pageCache;  // 页面缓存，这里是为了方便我们拿到页面后更快决定是否释放页面
+    private MemoryPageCacheImpl pageCache;  // 页面缓存，这里是为了方便我们拿到页面后更快决定是否释放页面
 
-    public PageIml(int pageNumber, byte[] data, PageCacheImpl pageCache) {
+    public MemoryPageIml(int pageNumber, byte[] data, MemoryPageCacheImpl pageCache) {
         this.pageNumber = pageNumber;
         this.data = data;
         this.pageCache = pageCache;

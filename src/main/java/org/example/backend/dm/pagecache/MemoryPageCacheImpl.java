@@ -1,9 +1,9 @@
 package org.example.backend.dm.pagecache;
 
 import org.example.backend.common.AbstractCache;
-import org.example.backend.dm.page.DiskPage;
 import org.example.backend.dm.page.Page;
-import org.example.backend.dm.page.PageIml;
+import org.example.backend.dm.page.MemoryPage;
+import org.example.backend.dm.page.MemoryPageIml;
 import org.example.backend.utils.ProgramExit;
 import org.example.comon.Error;
 
@@ -16,7 +16,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class PageCacheImpl extends AbstractCache<Page>{
+/**
+ * 缓存池的实现
+ *
+ * 我一开始想过是不是这里需要自己弄一个缓存数据存放，因为父类的我们看不到，后来一想我们没必要访问其
+ * 因为存放缓存的代码已经在抽象类中已经实现了
+ */
+public class MemoryPageCacheImpl extends AbstractCache<MemoryPage> implements MemoryPageCache {
     //我们设置的缓存值的最小值
     private static final int MEM_MIN_LIM = 10;
     private RandomAccessFile file;  //导入磁盘页面文件
@@ -26,11 +32,11 @@ public class PageCacheImpl extends AbstractCache<Page>{
     private AtomicInteger pageNumbers;
 
     /**
-     * 读入一个表的db文件来初始化页面缓存
+     * 初始化一个页面缓存池，并提供访问db文件的通道
      * @param path
      * @param maxResource
      */
-    public PageCacheImpl(String path, int maxResource) {
+    public MemoryPageCacheImpl(String path, int maxResource) {
         super(maxResource);
         this.lock=new ReentrantLock();
         /**
@@ -39,7 +45,7 @@ public class PageCacheImpl extends AbstractCache<Page>{
         if(maxResource<MEM_MIN_LIM){
             ProgramExit.programExit(Error.MemTooSmallException);
         }
-        File file1 = new File(path + DiskPage.DB_SUFFIX);
+        File file1 = new File(path + Page.DB_SUFFIX);
         try {
             if(!file1.createNewFile()){
                 ProgramExit.programExit(Error.FileAlreadyExitsException);
@@ -54,7 +60,7 @@ public class PageCacheImpl extends AbstractCache<Page>{
             this.file=new RandomAccessFile(file1,"rw");
             this.fileChannel=this.file.getChannel();
             long length = file.length();
-            this.pageNumbers=new AtomicInteger((int)length/PageIml.PAGE_SIZE);
+            this.pageNumbers=new AtomicInteger((int)length/ Page.PAGE_SIZE);
         } catch (IOException e){
             ProgramExit.programExit(e);
         }
@@ -66,20 +72,20 @@ public class PageCacheImpl extends AbstractCache<Page>{
      * @return
      */
     public static long pageOffset(int key){
-        return (long) (key-1) *PageIml.PAGE_SIZE;
+        return (long) (key-1) * Page.PAGE_SIZE;
     }
 
     /**
-     * 新建一个缓存页面
+     * 我们在读磁盘页面时，需要把磁盘页面转为缓存页面
      * @param data
      * @return
      */
-    public Page newPage(byte[] data){
+    public MemoryPage newPage(byte[] data){
         int num = pageNumbers.incrementAndGet();
-        PageIml pageIml = new PageIml(num, data, null);
+        MemoryPage page = new MemoryPageIml(num, data, null);
         //新建的页面要立刻保存到文件中
-        flush(pageIml);
-        return pageIml;
+        flushPage(page);
+        return page;
     }
 
     /**
@@ -88,14 +94,14 @@ public class PageCacheImpl extends AbstractCache<Page>{
      * @return
      * @throws Exception
      */
-    public Page getPage(long key) throws Exception {
-        return (Page) get(key);
+    public MemoryPage getPage(long key) throws Exception {
+        return (MemoryPage) get(key);
     }
 
     /**
      * 从页面缓存释放一个页面
      */
-    public void release(Page page){
+    public void release(MemoryPage page){
         int pageNumber = page.getPageNumber();
         release(pageNumber);
     }
@@ -105,7 +111,7 @@ public class PageCacheImpl extends AbstractCache<Page>{
      * 将一个缓存页面保存到文件中
      * @param page
      */
-    public void flush(Page page){
+    public void flush(MemoryPage page){
         ByteBuffer byteBuffer = ByteBuffer.wrap(page.getData());
         int pageNumber = page.getPageNumber();
         long offset = pageOffset(pageNumber);
@@ -121,6 +127,9 @@ public class PageCacheImpl extends AbstractCache<Page>{
         }
     }
 
+    public void flushPage(MemoryPage page) {
+        flush(page);
+    }
 
 
     /**
@@ -128,11 +137,11 @@ public class PageCacheImpl extends AbstractCache<Page>{
      * @param key
      * @return
      */
-    public Page getForCache(long key) {
+    public MemoryPage getForCache(long key) {
         int pgno=(int) key;
         //文件偏移
         long offset = pageOffset(pgno);
-        ByteBuffer byteBuffer = ByteBuffer.allocate(PageIml.PAGE_SIZE);
+        ByteBuffer byteBuffer = ByteBuffer.allocate(Page.PAGE_SIZE);
         lock.lock();
         try {
             fileChannel.position(offset);
@@ -143,7 +152,7 @@ public class PageCacheImpl extends AbstractCache<Page>{
         }finally {
             lock.unlock();
         }
-        return new PageIml(pgno,byteBuffer.array(),this);
+        return new MemoryPageIml(pgno,byteBuffer.array(),this);
     }
 
 
@@ -151,15 +160,15 @@ public class PageCacheImpl extends AbstractCache<Page>{
      *  驱逐完看是否是脏数据，是需要写回到磁盘
      * @param obj
      */
-    public void releaseForCache(Page obj) {
+    public void releaseForCache(MemoryPage obj) {
         if(obj.isDirty()){
-            flush(obj);
+            flushPage(obj);
             obj.setDirty(false);
         }
     }
 
     /**
-     * 获取当前缓存中个数
+     * 获取db文件的页面个数
      * @return
      */
     public int getPageNumber(){
