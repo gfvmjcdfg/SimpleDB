@@ -133,7 +133,7 @@ public class MemoryPageCacheImpl extends AbstractCache<MemoryPage> implements Me
 
 
     /**
-     * 页面不在缓存中时从磁盘中读
+     * 页面不在缓存中时从磁盘中读，并将磁盘页面返回成缓存页面
      * @param key
      * @return
      */
@@ -184,5 +184,17 @@ public class MemoryPageCacheImpl extends AbstractCache<MemoryPage> implements Me
             ProgramExit.programExit(e);
         }
         pageNumbers.set(maxPgno);
+    }
+
+    public void close(){
+        //将缓存池等关闭
+        super.close();
+        //关闭与db文件的通道
+        try {
+            file.close();
+            fileChannel.close();
+        } catch (IOException e) {
+            ProgramExit.programExit(e);
+        }
     }
 }

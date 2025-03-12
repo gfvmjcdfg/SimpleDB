@@ -83,6 +83,8 @@ public abstract class AbstractCache<T> {
         cache.put(key,obj);
         getting.remove(key);
         references.put(key,1);
+        //磁盘读取到缓存，要将缓存中个数+1
+        count++;
         lock.unlock();
 
         return obj;
@@ -132,7 +134,7 @@ public abstract class AbstractCache<T> {
     }
 
     /**
-     * 数据不在缓存中时的获取策略,此时会在getting数组中标记某个资源正在被加载,并且会将count++
+     * 数据不在缓存中时的获取策略,此时会在getting数组中标记某个资源正在被加载
      * @param key
      * @return
      */
