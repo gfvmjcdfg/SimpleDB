@@ -14,7 +14,7 @@ public abstract class AbstractCache<T> {
 
     private Map<Long,Integer> references; //缓存数据的引用计数
 
-    private Map<Long,Boolean> getting; //正在获取某资源的线程
+    private Map<Long,Boolean> getting; //用于标记某个不在缓存中的数据正在被加载
 
     private int maxResource; //允许的最大缓存数目
 
@@ -35,10 +35,12 @@ public abstract class AbstractCache<T> {
      * @param key
      * @return
      */
-    protected T get(long key) throws Exception {
-        //数据存在缓存中,但是缓存正在被其他人使用
+    public T get(long key) throws Exception {
+        //数据存在缓存中
         while(true){  //这个while 循环用来想要用的数据其他线程正在使用
             lock.lock();
+
+            //数据不在缓存中，但是数据正在被加载
             if(getting.containsKey(key)){
                 lock.unlock();
                 try {
@@ -90,7 +92,7 @@ public abstract class AbstractCache<T> {
      * 将数据从缓存中释放
      * @param key
      */
-    protected void release(long key){
+    public void release(long key){
         lock.lock();
         try {
             int refNum = references.get(key)-1;
@@ -113,7 +115,7 @@ public abstract class AbstractCache<T> {
     /**
      * 关闭缓存
      */
-    protected void close(){
+    public void close(){
         lock.lock();
         try {
             Set<Long> keySet = cache.keySet();
@@ -130,16 +132,16 @@ public abstract class AbstractCache<T> {
     }
 
     /**
-     * 数据不在缓存中时的获取策略,会在这个函数中将count++
+     * 数据不在缓存中时的获取策略,此时会在getting数组中标记某个资源正在被加载,并且会将count++
      * @param key
      * @return
      */
-    protected abstract T getForCache(long key);
+    public abstract T getForCache(long key);
 
     /**
      * 资源不在缓存时的驱逐策略,会将数据写回到db文件中，保证db文件中数据是最新的
      * @param obj
      */
-    protected abstract void releaseForCache(T obj);
+    public abstract void releaseForCache(T obj);
 
 }
