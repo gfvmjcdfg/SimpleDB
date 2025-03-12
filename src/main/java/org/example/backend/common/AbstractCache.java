@@ -63,7 +63,9 @@ public abstract class AbstractCache<T> {
                 lock.unlock();
                 throw Error.CacheFullException;
             }
-            //这里跳出循环只会是数据不在缓存中跳出
+            //此时数据不在缓存中，我们需要从磁盘读数据，先将该数据设置成有人在加载，并跳出当前循环
+            count++;
+            getting.put(key,true);
             break;
         }
 
@@ -73,8 +75,8 @@ public abstract class AbstractCache<T> {
         }catch (Exception e){
             //没能获取到数据
             lock.lock();
-            count--;
             getting.remove(key);
+            count--;
             lock.unlock();
         }
 
